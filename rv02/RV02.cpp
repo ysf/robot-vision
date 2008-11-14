@@ -5,10 +5,6 @@
 
 #include "RV02.h"
 
-#include <iostream>
-
-using namespace std;
-
 #include "gtk.h"
 #include "ltiGtkServer.h"
 
@@ -20,12 +16,12 @@ using namespace std;
 
 namespace lti {
 
-    double affine_values[6] = {
+    double affine_values[ 6 ] = {
         160.791667,  0.441667, -0.13,        // a0, a1, a2
         218.741667,  0.001667,  0.4925       // b0, b1, b2
     };
 
-    unsigned fourpoint_values[8] = {
+    unsigned fourpoint_values[ 8 ] = {
         197, 100,                            // xq0, yq0
         584, 93,                             // xq1, yq1
         665, 473,                            // xq2, yq2
@@ -41,7 +37,7 @@ namespace lti {
 	
     int nearest_neighbor( const double x, const double y, const channel8& src )
     {
-		int x0 = x + 0.5 , y0 = y + 0.5;    // + 0.5 damit gerundet und nicht abgeschnitten wird
+		    int x0 = x + 0.5 , y0 = y + 0.5;    // + 0.5 damit gerundet und nicht abgeschnitten wird
 
         if( in_border( x0, y0, src ))
             return src[ y0 ][ x0 ];        
@@ -49,26 +45,25 @@ namespace lti {
         return 0;
     }
 
-	int bilinear( const double x, const double y, const channel8& src ) 
-	{
-		int x0 = x, y0 = y;
-
+  	int bilinear( const double x, const double y, const channel8& src ) 
+  	{
+  		  int x0 = x, y0 = y;
+  
         if( x0 < 0 || y0 < 0 || !in_border( x0 + 1, y0 + 1, src ))
-            return 0;
+              return 0;
+  
+  		    double	dx   = x - x0, dy   = y - y0,
+  				        omdx = 1 - dx, omdy = 1 - dy;
+  
+          return	src[ y0     ][ x0     ] * omdy * omdx + 
+          				src[ y0     ][ x0 + 1 ] * omdy * dx   +
+          				src[ y0 + 1 ][ x0     ] * dy   * omdx +
+          				src[ y0 + 1 ][ x0 + 1 ] * dy   * dx;
+  	}    
 
-		double	dx   = x - x0, dy   = y - y0,
-				omdx = 1 - dx, omdy = 1 - dy;
-
-        return	src[ y0     ][ x0     ] * omdy * omdx + 
-				src[ y0     ][ x0 + 1 ] * omdy * dx   +
-				src[ y0 + 1 ][ x0     ] * dy   * omdx +
-				src[ y0 + 1 ][ x0 + 1 ] * dy   * dx;
-	}    
-
-    void affine_transform(  channel8& dst,
-                            const channel8& src,
-                            double v[6],
-                            int(*interpol)(double, double, const channel8&) ) {               
+    void affine_transform(  channel8& dst, const channel8& src, double v[ 6 ],
+                            int(* interpol)( double, double, const channel8& ))
+    {
 
         double a0 = v[0], a1 = v[1], a2 = v[2];
         double b0 = v[3], b1 = v[4], b2 = v[5];
@@ -85,11 +80,10 @@ namespace lti {
         }
     }
 
-    void fourpoint_transform( channel8& dst,
-                              const channel8& src,
-                              unsigned v[8], // v = { xq0, yq0 .. xq3, yq3 } // 0 .. 7
-                              int(*interpol)(double, double, const channel8&) ) {        
-
+    void fourpoint_transform( channel8& dst, const channel8& src,
+                              unsigned v[ 8 ], // v = { xq0, yq0 .. xq3, yq3 } // 0 .. 7
+                              int (* interpol)( double, double, const channel8& ))
+    {
         int rows = dst.rows();
         int cols = dst.columns();
 
@@ -112,48 +106,45 @@ namespace lti {
         }
     }
 
-	void RV02::operator()(int argc,char *argv[])
-	{
-		gtkServer server;	// has always to be started (AMei) if program is without gtk-Widgets 
-		server.start();		
-
-		/**** instantiation of used components ****/
-        
+  	void RV02::operator()( int argc, char *argv[] )
+  	{
+        gtkServer server;
+        server.start();		
+                    
         image img;		
-		loadBMP loader;                         
+        loadBMP loader;                         
+        
+        viewer view( "original" ),
+               view_affine_nearest( "affine nearest" ),
+               view_affine_bilinear( "affine bilinear" ),     
+               view_fourpoint_bilinear( "fourpoint bilinear" );
 
-		viewer view("original"),
-               view_affine_nearest("affine nearest"),
-               view_affine_bilinear("affine bilinear"),     
-               view_fourpoint_bilinear("fourpoint bilinear");
-									    
-		channel8    src,
-                    affine_nearest,
-                    affine_bilinear,
-                    fourpoint_bilinear;
-
-		// object to split image into hue ( farbton ), saturation( farbsättigung )  and intensity ( grauwert )
-		splitImageToHSI splitter;
-
-		/**** the program ****/
-
-		loader.load( "Kalib.bmp", img);		
-		splitter.getIntensity( img, src );	
-		view.show( src );
-		
+        channel8 src,
+                 affine_nearest,
+                 affine_bilinear,
+                 fourpoint_bilinear;
+                
+        splitImageToHSI splitter;
+        
+        /* the program */
+        
+        loader.load( "kalib.bmp", img);		
+        splitter.getIntensity( img, src );	
+        view.show( src );
+        
         affine_nearest.resize( src.rows(), src.columns(), 0, false, true ); 
         affine_bilinear.resize( src.rows(), src.columns(), 0, false, true );
         fourpoint_bilinear.resize( src.rows(), src.columns(), 0, false, true );
                 
-        affine_transform( affine_nearest, src, affine_values, nearest_neighbor );
+        affine_transform( affine_nearest,  src, affine_values, nearest_neighbor );
         affine_transform( affine_bilinear, src, affine_values, bilinear );
-
+        
         fourpoint_transform( fourpoint_bilinear, src, fourpoint_values, bilinear );
-                            
-		view_affine_nearest.show(affine_nearest); 
-        view_affine_bilinear.show(affine_bilinear);  
-        view_fourpoint_bilinear.show(fourpoint_bilinear);  
-
-		getchar();
-	}
+                                
+        view_affine_nearest.show( affine_nearest ); 
+        view_affine_bilinear.show( affine_bilinear );
+        view_fourpoint_bilinear.show( fourpoint_bilinear );
+        
+  		  getchar();
+  	}
 };
